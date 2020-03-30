@@ -41,18 +41,13 @@ if [ $VOLUME_ID ]; then
 		chown -R ec2-user: /dltraining/
 		cd /home/ec2-user/
 
-    eval `ssh-agent -s`
-    cp /dltraining/credentials/id_rsa_deploy /home/ec2-user/.ssh/
-    cp /dltraining/credentials/id_rsa_deploy.pub /home/ec2-user/.ssh/
-    ssh-add '/home/ec2-user/.ssh/id_rsa_deploy'
-
     # Get training code
-    git clone git@github.com:jeasung-pf/pytorch-deeplab-xception.git
+    git clone https://github.com/jeasung-pf/pytorch-deeplab-xception.git
     chown -R ec2-user: /home/ec2-user/pytorch-deeplab-xception
     cd /home/ec2-user/pytorch-deeplab-xception/segmentation
 
 		# Initiate training using the tensorflow_36 conda environment
-		sudo -H -u ec2-user bash -c "source /home/ec2-user/anaconda3/bin/activate pytorch_p36; pip install pycocotools tensorboardX tqdm numpy==1.16.0; source ./train_voc.sh"
+		sudo -H -u ec2-user bash -c "source /home/ec2-user/anaconda3/bin/activate pytorch_p36; pip install pycocotools tensorboardX tqdm numpy==1.16.0 requests; source ./train_voc.sh"
 fi
 
 # After training, clean up by cancelling spot requests and terminating itself

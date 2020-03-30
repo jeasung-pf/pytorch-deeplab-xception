@@ -310,5 +310,6 @@ $RECYCLE.BIN/
 grpc
 VOCdevkit
 *.pem
+data
 
 # End of https://www.gitignore.io/api/linux,macos,opencv,python,windows,pycharm+all,jupyternotebook,visualstudiocode

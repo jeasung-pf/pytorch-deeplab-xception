@@ -2,6 +2,8 @@ import argparse
 import os
 import numpy as np
 from tqdm import tqdm
+import requests
+import time
 
 from mypath import Path
 from dataloaders import make_data_loader
@@ -109,8 +111,13 @@ class Trainer(object):
             tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
             self.writer.add_scalar('train/total_loss_iter', loss.item(), i + num_img_tr * epoch)
 
-            # Show 10 * 3 inference results each epoch
+            # for each batch
             if i % (num_img_tr // 10) == 0:
+                # If the spot instance is going to terminate soon, then sleep
+                status_code = requests.get("http://169.254.169.254/latest/meta-data/spot/instance-action").status_code
+                if status_code != 404:
+                    time.sleep(150)
+                # Show 10 * 3 inference results each epoch
                 global_step = i + num_img_tr * epoch
                 self.summary.visualize_image(self.writer, self.args.dataset, image, target, output, global_step)
 
@@ -293,6 +300,8 @@ def main():
     print('Starting Epoch:', trainer.args.start_epoch)
     print('Total Epoches:', trainer.args.epochs)
     for epoch in range(trainer.args.start_epoch, trainer.args.epochs):
+
+
         trainer.training(epoch)
         if not trainer.args.no_val and epoch % args.eval_interval == (args.eval_interval - 1):
             trainer.validation(epoch)
