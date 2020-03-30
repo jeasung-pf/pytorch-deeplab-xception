@@ -4,8 +4,8 @@ INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 INSTANCE_AZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
 AWS_REGION=ap-northeast-2
 
-VOLUME_ID=$(aws ec2 describe-volumes --region $AWS_REGION --filter "Name=tag:Name,Values=DL-datasets-checkpoints" --query "Volumes[].VolumeId" --output text)
-VOLUME_AZ=$(aws ec2 describe-volumes --region $AWS_REGION --filter "Name=tag:Name,Values=DL-datasets-checkpoints" --query "Volumes[].AvailabilityZone" --output text)
+VOLUME_ID=$(aws ec2 describe-volumes --region $AWS_REGION --filter Name=tag:Name,Values=DL-datasets-checkpoints Name=status,Values=available --query "Volumes[].VolumeId" --output text)
+VOLUME_AZ=$(aws ec2 describe-volumes --region $AWS_REGION --filter Name=tag:Name,Values=DL-datasets-checkpoints Name=status,Values=available  --query "Volumes[].AvailabilityZone" --output text)
 
 # Proceed if Volume Id is not null or unset
 if [ $VOLUME_ID ]; then
@@ -45,9 +45,10 @@ if [ $VOLUME_ID ]; then
     git clone https://github.com/jeasung-pf/pytorch-deeplab-xception.git
     chown -R ec2-user: /home/ec2-user/pytorch-deeplab-xception
     cd /home/ec2-user/pytorch-deeplab-xception/segmentation
+    chmod +x /home/ec2-user/pytorch-deeplab-xception/segmentation/train_voc.sh
 
 		# Initiate training using the tensorflow_36 conda environment
-		sudo -H -u ec2-user bash -c "source /home/ec2-user/anaconda3/bin/activate pytorch_p36; pip install pycocotools tensorboardX tqdm numpy==1.16.0 requests; source ./train_voc.sh"
+		sudo -H -u ec2-user bash -c "source /home/ec2-user/anaconda3/bin/activate pytorch_p36; pip install pycocotools tensorboardX tqdm numpy==1.16.0 requests; ./train_voc.sh"
 fi
 
 # After training, clean up by cancelling spot requests and terminating itself
