@@ -77,17 +77,18 @@ class Trainer(object):
             path = self._get_last_experiment()
             if path is not None:
                 if not os.path.isfile(path):
-                    raise RuntimeError("=> no checkpoint found at '{}'" .format(path))
-                checkpoint = torch.load(path)
-                args.start_epoch = checkpoint['epoch']
-                if args.cuda:
-                    self.model.module.load_state_dict(checkpoint['state_dict'])
+                    print("=> no checkpoint found at '{}'" .format(path))
                 else:
-                    self.model.load_state_dict(checkpoint['state_dict'])
-                if not args.ft:
-                    self.optimizer.load_state_dict(checkpoint['optimizer'])
-                self.best_pred = checkpoint['best_pred']
-                print("=> loaded checkpoint '{}' (epoch {})".format(path, checkpoint['epoch']))
+                    checkpoint = torch.load(path)
+                    args.start_epoch = checkpoint['epoch']
+                    if args.cuda:
+                        self.model.module.load_state_dict(checkpoint['state_dict'])
+                    else:
+                        self.model.load_state_dict(checkpoint['state_dict'])
+                    if not args.ft:
+                        self.optimizer.load_state_dict(checkpoint['optimizer'])
+                    self.best_pred = checkpoint['best_pred']
+                    print("=> loaded checkpoint '{}' (epoch {})".format(path, checkpoint['epoch']))
             else:
                 print("=> specified 'resume' argument to True but there is no checkpoint in the given path.")
 
