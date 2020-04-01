@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py --backbone xception --lr 0.0007 --workers 16 --epochs 100 --batch-size 16 --gpu-ids 0,1,2,3 --checkname deeplab-xception --eval-interval 1 --dataset pascal --on-cloud 1 --resume 1
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python train.py --backbone xception --lr 0.007 --workers 16 --epochs 100 --batch-size 16 --out-stride 8 --gpu-ids 0,1,2,3,4,5,6,7 --checkname deeplab-xception --eval-interval 1 --dataset pascal --on-cloud 1
