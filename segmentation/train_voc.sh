@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py --backbone drn --lr 0.007 --workers 16 --epochs 50 --batch-size 16 --gpu-ids 0,1,2,3 --checkname deeplab-drn --eval-interval 1 --dataset pascal
+CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py --backbone xception --lr 0.0007 --workers 24 --epochs 100 --batch-size 32 --gpu-ids 0,1,2,3 --checkname deeplab-xception --eval-interval 1 --dataset pascal

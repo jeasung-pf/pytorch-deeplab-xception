@@ -311,5 +311,6 @@ grpc
 VOCdevkit
 *.pem
 data
+access_nipa_server.sh
 
 # End of https://www.gitignore.io/api/linux,macos,opencv,python,windows,pycharm+all,jupyternotebook,visualstudiocode
