@@ -11,7 +11,7 @@
           "GroupId": "sg-09ae22d52000db8f8"
         }
       ],
-      "InstanceType": "p3.8xlarge",
+      "InstanceType": "p3.16xlarge",
       "Placement": {
         "AvailabilityZone": "ap-northeast-2a, ap-northeast-2c"
       },
