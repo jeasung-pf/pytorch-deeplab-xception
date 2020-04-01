@@ -117,7 +117,6 @@ class Trainer(object):
             if i % 16 == 0 and self.args.on_cloud:
                 # If the spot instance is going to terminate soon, then sleep
                 status_code = requests.get("http://169.254.169.254/latest/meta-data/spot/instance-action").status_code
-                print(status_code)
                 if status_code != 404:
                     time.sleep(150)
 
