@@ -73,20 +73,23 @@ class Trainer(object):
 
         # Resuming checkpoint
         self.best_pred = 0.0
-        if args.resume is not None:
-            if not os.path.isfile(args.resume):
-                raise RuntimeError("=> no checkpoint found at '{}'" .format(args.resume))
-            checkpoint = torch.load(args.resume)
-            args.start_epoch = checkpoint['epoch']
-            if args.cuda:
-                self.model.module.load_state_dict(checkpoint['state_dict'])
+        if args.resume:
+            path = self._get_last_experiment()
+            if path is not None:
+                if not os.path.isfile(path):
+                    raise RuntimeError("=> no checkpoint found at '{}'" .format(path))
+                checkpoint = torch.load(path)
+                args.start_epoch = checkpoint['epoch']
+                if args.cuda:
+                    self.model.module.load_state_dict(checkpoint['state_dict'])
+                else:
+                    self.model.load_state_dict(checkpoint['state_dict'])
+                if not args.ft:
+                    self.optimizer.load_state_dict(checkpoint['optimizer'])
+                self.best_pred = checkpoint['best_pred']
+                print("=> loaded checkpoint '{}' (epoch {})".format(path, checkpoint['epoch']))
             else:
-                self.model.load_state_dict(checkpoint['state_dict'])
-            if not args.ft:
-                self.optimizer.load_state_dict(checkpoint['optimizer'])
-            self.best_pred = checkpoint['best_pred']
-            print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(args.resume, checkpoint['epoch']))
+                print("=> specified 'resume' argument to True but there is no checkpoint in the given path.")
 
         # Clear start epoch if fine-tuning
         if args.ft:
@@ -184,6 +187,16 @@ class Trainer(object):
                 'best_pred': self.best_pred,
             }, is_best)
 
+    def _get_last_experiment(self):
+        directory = self.saver.directory
+        runs = self.saver.runs
+        if runs:
+            run_id = int(runs[-1].split('_')[-1])
+            return os.path.join(directory, 'experiment_{}'.format(str(run_id)), "checkpoint.pth.tar")
+        else:
+            return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeeplabV3Plus Training")
     parser.add_argument('--backbone', type=str, default='resnet',
@@ -243,18 +256,13 @@ def main():
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
     # checking point
-    parser.add_argument('--resume', type=str, default=None,
-                        help='put the path to resuming file if needed')
-    parser.add_argument('--checkname', type=str, default=None,
-                        help='set the checkpoint name')
+    parser.add_argument('--resume', type=bool, default=False, help='put the path to resuming file if needed')
+    parser.add_argument('--checkname', type=str, default=None, help='set the checkpoint name')
     # finetuning pre-trained models
-    parser.add_argument('--ft', action='store_true', default=False,
-                        help='finetuning on a different dataset')
+    parser.add_argument('--ft', action='store_true', default=False, help='finetuning on a different dataset')
     # evaluation option
-    parser.add_argument('--eval-interval', type=int, default=1,
-                        help='evaluuation interval (default: 1)')
-    parser.add_argument('--no-val', action='store_true', default=False,
-                        help='skip validation during training')
+    parser.add_argument('--eval-interval', type=int, default=1, help='evaluuation interval (default: 1)')
+    parser.add_argument('--no-val', action='store_true', default=False, help='skip validation during training')
     parser.add_argument("--on-cloud", type=bool, default=False, help="If this training instance is running on cloud or not.")
 
     args = parser.parse_args()
