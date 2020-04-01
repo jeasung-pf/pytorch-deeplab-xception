@@ -111,12 +111,14 @@ class Trainer(object):
             tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
             self.writer.add_scalar('train/total_loss_iter', loss.item(), i + num_img_tr * epoch)
 
-            # for each batch
-            if i % (num_img_tr // 10) == 0:
+            if i % 16 == 0 and self.args.on_cloud:
                 # If the spot instance is going to terminate soon, then sleep
                 status_code = requests.get("http://169.254.169.254/latest/meta-data/spot/instance-action").status_code
+                print(status_code)
                 if status_code != 404:
                     time.sleep(150)
+
+            if i % (num_img_tr // 10) == 0:
                 # Show 10 * 3 inference results each epoch
                 global_step = i + num_img_tr * epoch
                 self.summary.visualize_image(self.writer, self.args.dataset, image, target, output, global_step)
@@ -253,6 +255,7 @@ def main():
                         help='evaluuation interval (default: 1)')
     parser.add_argument('--no-val', action='store_true', default=False,
                         help='skip validation during training')
+    parser.add_argument("--on-cloud", type=bool, default=False, help="If this training instance is running on cloud or not.")
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
