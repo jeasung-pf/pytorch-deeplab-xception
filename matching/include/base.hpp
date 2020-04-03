@@ -52,42 +52,15 @@ namespace cv {
 
             virtual ~Base();
 
-//            virtual void clear();
-
-//            virtual int getVarCount() const = 0;
-//
-//            virtual bool empty() const CV_OVERRIDE;
-//
-//            virtual bool isTrained() const = 0;
-//
-//            virtual bool isClassifier() const = 0;
-//
-//            virtual bool train( const cv::Ptr<cv::ml::TrainData>& trainData, int flags=0 );
-//
-//            virtual bool train( InputArray samples, int layout, InputArray responses );
-//
-//            virtual float calcError( const cv::Ptr<cv::ml::TrainData>& data, bool test, OutputArray resp ) const;
-//
-//            virtual float predict( InputArray samples, OutputArray results=noArray(), int flags=0 ) const = 0;
-
             virtual void write(cv::FileStorage *storage, const char *name) const;
 
             virtual void read(cv::FileStorage *storage, CvFileNode *node);
-
-            bool criterion(cv::DMatch element) {
-                if (element.distance < filterThreshold) {
-                    return true;
-                }
-                return false;
-            }
 
         protected:
 
             virtual bool
             extract(const cv::Mat &sample, const cv::Mat &sampleMask, std::vector<cv::KeyPoint> &sampleKeyPoints,
                     cv::Mat &sampleDescriptor) const;
-
-            float filterThreshold;
 
             cv::Ptr<cv::Matcher::FeatureParams> featureParams;
             cv::Ptr<cv::flann::IndexParams> indexParams;

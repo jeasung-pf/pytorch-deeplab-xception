@@ -19,172 +19,117 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include <thread>
 
 #include <grpcpp/grpcpp.h>
-#include <grpc/support/log.h>
+#include <grpcpp/health_check_service_interface.h>
+#include <grpcpp/ext/proto_server_reflection_plugin.h>
 
-#ifdef BAZEL_BUILD
-#include "matching.grpc.pb.h"
-#else
-#include "matching.grpc.pb.h"
-#endif
+#include <matching.grpc.pb.h>
+#include <Matcher.hpp>
 
-#include <include/Bootstrap.hpp>
-#include <include/Classifier.hpp>
-#include <include/Matcher.hpp>
-#include <params.hpp>
 
 using grpc::Server;
-using grpc::ServerAsyncResponseWriter;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
-using grpc::ServerCompletionQueue;
 using grpc::Status;
-
 using protocol::Feature;
-using protocol::Features;
 using protocol::Response;
-using protocol::Responses;
 using protocol::Matching;
 
-class ServerImpl final {
-public:
-    ~ServerImpl() {
-        server_->Shutdown();
-        // Always shutdown the completion queue after the server.
-        cq_->Shutdown();
+class MatchingServiceImpl final : public Matching::Service {
+
+    bool create_window(void) {
+        cv::namedWindow(m_window_calibrated);
+        return true;
     }
 
-    // There is no shutdown handling in this code.
-    void Run() {
-        std::string server_address("0.0.0.0:50051");
+    ::grpc::Status calibrate(::grpc::ServerContext *context, const ::protocol::Feature *request, ::protocol::Response *response) {
+        std::cout << "Got a new request." << std::endl;
 
-        ServerBuilder builder;
-        // Listen on the given address without any authentication mechanism.
-        builder.AddListeningPort(server_address, grpc::InsecureChannelCredentials());
-        // Register "service_" as the instance through which we'll communicate with
-        // clients. In this case it corresponds to an *asynchronous* service.
-        builder.RegisterService(&service_);
-        // Get hold of the completion queue used for the asynchronous communication
-        // with the gRPC runtime.
-        cq_ = builder.AddCompletionQueue();
-        // Finally assemble the server.
-        server_ = builder.BuildAndStart();
-        std::cout << "Server listening on " << server_address << std::endl;
+        if (m_model.empty()) {
+            std::cout << "Creating a new model..." << std::endl;
+            m_feature_params = new cv::Matcher::BRISKFeatureParams();
+            m_index_params = new cv::flann::LshIndexParams(10, 10, 2);
+            m_search_params = new cv::flann::SearchParams();
+            m_model = new cv::Matcher::Matcher(m_feature_params, m_index_params, m_search_params);
 
-        // Process to the server's main loop.
-        HandleRpcs();
+//            try {
+//                m_model->create_window();
+//                std::cout << "Window created..." << std::endl;
+//            } catch (std::exception e) {
+//                std::cout << e.what() << std::endl;
+//                std::cout << "Error creating a namedWindow, check your gui library." << std::endl;
+//            }
+            m_model->window_created = false;
+        }
+
+        if (template_image.empty()) {
+            std::cout << "Reading a template image" << std::endl;
+            template_image = cv::imread("../data/identification.jpg");
+        }
+
+        std::string image_encoded = request->image_encoded();
+        std::string image_segmentation_class_encoded = request->image_segmentation_class_encoded();
+        cv::Mat image, image_segmentation_class, calibrated;
+
+        try {
+            std::vector<uchar> image_buffer(image_encoded.begin(), image_encoded.end()),
+                    image_segmentation_class_buffer(image_segmentation_class_encoded.begin(),
+                                                    image_segmentation_class_encoded.end());
+            image = cv::imdecode(image_buffer, cv::IMREAD_COLOR);
+            image_segmentation_class = cv::imdecode(image_segmentation_class_buffer, cv::IMREAD_GRAYSCALE);
+        } catch (std::exception e) {
+            std::cout << e.what() << std::endl;
+            std::cout << "Error while decoding a received image" << std::endl;
+        }
+
+        m_model->train(image, template_image, image_segmentation_class, calibrated, 128.0);
+
+        // cv::imshow(m_window_calibrated, calibrated);
+        cv::imwrite("./response.jpg", calibrated);
+
+        response->set_image_filename("");
+        response->set_image_recognition_dates("");
+        response->set_image_recognition_numbers("");
+        response->set_image_recognition_verification("");
+
+        return Status::OK;
     }
 
-private:
-    // Class encompassing the state and login needed to serve a request.
-    class CallData {
-    public:
-        // Take in the "service" instance (in this case representing an asynchronous server)
-        // and the completion queue "cq" used for asynchronous communication with the gRPC
-        // runtime.
-        CallData(Matching::AsyncService *service, ServerCompletionQueue *cq) : service_(service), cq_(cq),
-                                                                               responder_(&ctx_), status_(CREATE) {
-            Proceed();
-        }
+protected:
+    cv::Ptr<cv::Matcher::Matcher> m_model;
+    cv::Ptr<cv::Matcher::FeatureParams> m_feature_params;
+    cv::Ptr<cv::flann::IndexParams> m_index_params;
+    cv::Ptr<cv::flann::SearchParams> m_search_params;
+    cv::Mat template_image;
 
-        void Proceed() {
-            if (status_ == CREATE) {
-                // Make this instance progress to the PROCESS state.
-                status_ = PROCESS;
-                // As part of the initial CREATE state, we *request* that the system start
-                // processing recvFeature/recvFeatures requests. In this request, "this" acts
-                // are the tag uniquely identifying the request (so that different CallData
-                // instances can serve different requests concurrently), in this case the
-                // memory address of this CallData instance.
-                service_->RequestrecvFeature(&ctx_, &feature_, &responder_, cq_, cq_, this);
-            } else if (status_ == PROCESS) {
-                // Spawn a new CallData instance to serve new clients while we process the one
-                // for this CallData. The instance will deallocate itself as part of its
-                // FINISH state.
-                new CallData(service_, cq_);
+    std::string m_window_calibrated = "Calibrated image";
 
-                // The actual processing.
-                // TODO. implement image processing methods
-                std::string image_encoded = feature_.image_encoded();
-                std::string image_filename = feature_.image_filename();
-                std::string image_segmentation_class_encoded feature_.image_segmentation_class_encoded();
-                std::string image_segmentation_class_format = feature_.image_segmentation_class_format();
-
-                cv::Mat image_decoded = cv::imdecode(image_encoded, cv::IMREAD_COLOR);
-                cv::Mat image_segmentation_class_decoded = cv::imdecode(image_segmentation_class_encoded, cv::IMREAD_COLOR);
-
-                cv::Ptr<cv::Matcher::FeatureParams> featureParams = cv::Matcher::ORBFeatureParams();
-                cv::Ptr<cv::flann::IndexParams> indexParams = cv::flann::LshIndexParams(1, 10, 2);
-                cv::Ptr<cv::flann::SearchParams> searchParams = cv::flann::SearchParams();
-
-                cv::Ptr<cv::Matcher::Matcher> model = new cv::Matcher::Matcher(featureParams, indexParams, searchParams);
-                cv::Mat transformed;
-                model->predict(image_decoded,
-                        image_segmentation_class_decoded,
-                        transformed,
-                        cv::Matcher::identification_t::ID_DRIVERS_LICENSE);
-                // And we are done! Let the gRPC runtime know we've finished, using the
-                // memory address of this instance as the uniquely identifying tag for
-                // the event.
-                status_ = FINISH;
-                responder_.Finish(response_, Status::OK, this);
-            } else {
-                GPR_ASSERT(status_ == FINISH);
-                delete this;
-            }
-        }
-
-
-    private:
-        // The means of communication with the gRPC runtime for an asynchronous server.
-        Matching::AsyncService *service_;
-        // The producer-consumer queue where for asynchronous server notifications.
-        ServerCompletionQueue *cq_;
-        // Context for the rpc, allowing to tweak aspects of it such as the use of compression,
-        // authentication, as well as to send metadata back to the client.
-        ServerContext ctx_;
-        // What we get from the client;
-        Feature feature_;
-        Features features_;
-        Response response_;
-        Responses responses_;
-        // The means to get back to the client.
-        ServerAsyncResponseWriter<Response> responder_;
-        // Let's implement a tiny state machine with the following states.
-        enum CallStatus {
-            CREATE, PROCESS, FINISH
-        };
-        CallStatus status_;
-    };
-
-    // This can be run in multiple threads if needed.
-    void HandleRpcs() {
-        // Spawn a new CallData instance to serve new clients.
-        new CallData(&service_, cq_.get());
-        void *tag;
-        bool ok;
-        while (true) {
-            // Block waiting to read the next event from the completion queue. The event is
-            // uniquely identified by its tag, which in this case is the memory address
-            // of a CallData instance.
-            // The return value of Next should always be checked. This return value tells us
-            // whether there is any kind of event or cq_ is shutting down.
-            GPR_ASSERT(cq_->Next(&tag, &ok));
-            GPR_ASSERT(ok);
-            static_cast<CallData*>(tag)->Proceed();
-        }
-    }
-
-    std::unique_ptr<ServerCompletionQueue> cq_;
-    Matching::AsyncService service_;
-    std::unique_ptr<Server> server_;
 };
 
+void RunServer(void) {
+    std::string server_address("0.0.0.0:50052");
+    MatchingServiceImpl service;
 
-int main(int argc, char** argv) {
-//    RunServer();
+    grpc::EnableDefaultHealthCheckService(true);
+    grpc::reflection::InitProtoReflectionServerBuilderPlugin();
+    ServerBuilder builder;
+    // Listen on the given address without any authentication mechanism.
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    // Register "service" as the instance through which we'll communicate with
+    // clients. In this case it corresponds to an *synchronous* service.
+    builder.RegisterService(&service);
+    // Finally assemble the server.
+    std::unique_ptr<Server> server(builder.BuildAndStart());
+    std::cout << "Server listening on " << server_address << std::endl;
+
+    // Wait for the server to shutdown. Note that some other thread must be
+    // responsible for shutting down the server for this call to ever return.
+    server->Wait();
+}
+
+int main(int argc, char **argv) {
+    RunServer();
 
     return 0;
 }

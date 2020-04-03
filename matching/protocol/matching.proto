@@ -15,9 +15,11 @@
 syntax = "proto3";
 package protocol;
 
-import "gateway.proto";
+import "interface.proto";
 
 service Matching {
-    rpc recvFeature(Feature) returns (Response);
-    rpc recvFeatures(Features) returns (Responses);
+//    rpc recvFeature(Feature) returns (Response);
+//    rpc recvFeatures(Features) returns (Responses);
+
+    rpc calibrate(Feature) returns (Response);
 }

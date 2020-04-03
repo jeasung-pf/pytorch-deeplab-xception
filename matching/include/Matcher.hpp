@@ -39,21 +39,49 @@
 #include <params.hpp>
 #include <base.hpp>
 
-namespace cv { namespace Matcher {
-	class CV_EXPORTS Matcher : protected Base {
-	public:
-        CV_WRAP Matcher(const cv::Matcher::FeatureParams &_featureParams,
-                        const cv::flann::IndexParams &_indexParams,
-                        const cv::flann::SearchParams &_searchParams);
-        virtual ~Matcher();
+namespace cv {
+    namespace Matcher {
+        class CV_EXPORTS Matcher : protected Base {
+        public:
+            CV_WRAP Matcher(const cv::Ptr<cv::Matcher::FeatureParams> &_featureParams,
+                            const cv::Ptr<cv::flann::IndexParams> &_indexParams,
+                            const cv::Ptr<cv::flann::SearchParams> &_searchParams);
 
-        CV_WRAP virtual void clear() const;
+            virtual int getVarCount() const CV_OVERRIDE;
 
-        // CV_WRAP virtual bool train(const cv::Mat &trainData) const;
-        CV_WRAP virtual bool predict(const cv::Mat &sample, const cv::Mat &sampleMask, CV_OUT cv::Mat &transformed, cv::Matcher::identification_t mode) const;
+            virtual bool empty() const CV_OVERRIDE;
 
-        virtual void write(CvFileStorage *storage, const char *name) const;
-        virtual void read(CvFileStorage *storage, CvFileNode *node);
-    };
-}}
+            virtual bool isTrained() const CV_OVERRIDE;
+
+            virtual bool isClassifier() const CV_OVERRIDE;
+
+            virtual bool train(const cv::Ptr<cv::ml::TrainData> &trainData, int flags = 0) CV_OVERRIDE;
+
+            virtual bool train(InputArray samples, int layout, InputArray responses) CV_OVERRIDE;
+
+            virtual bool train(InputArray samples, InputArray template_image, InputArray mask, OutputArray calibrated,
+                               float threshold);
+
+            virtual float
+            calcError(const cv::Ptr<cv::ml::TrainData> &data, bool test, OutputArray resp) const CV_OVERRIDE;
+
+            virtual float predict(InputArray samples, OutputArray results = noArray(), int flags = 0) const CV_OVERRIDE;
+
+            virtual void write(cv::FileStorage *storage, const char *name) const CV_OVERRIDE;
+
+            virtual void read(cv::FileStorage *storage, CvFileNode *node) CV_OVERRIDE;
+
+            virtual bool create_window();
+
+
+            static std::string m_window_image, m_window_captured, m_window_clicked, m_window_mask, m_window_matching, m_window_homography;
+            bool window_created;
+        protected:
+            cv::Ptr<cv::BRISK> brisk;
+            std::vector<cv::KeyPoint> samples_key_points, template_key_points;
+            cv::Mat samples_descriptors, template_descriptors;
+            std::vector<cv::Point2f> samples_corners, template_corners;
+        };
+    }
+}
 

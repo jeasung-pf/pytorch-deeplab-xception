@@ -89,12 +89,11 @@ else ()
     set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:grpc_cpp_plugin>)
 endif ()
 
-
 # Proto file
 get_filename_component(matching_proto "${CMAKE_CURRENT_BINARY_DIR}/../protocol/matching.proto" ABSOLUTE)
-get_filename_component(gateway_proto "${CMAKE_CURRENT_BINARY_DIR}/../../gateway/protocol/gateway.proto" ABSOLUTE)
+get_filename_component(interface_proto "${CMAKE_CURRENT_BINARY_DIR}/../../gateway/protocol/interface.proto" ABSOLUTE)
 get_filename_component(matching_proto_path "${matching_proto}" PATH)
-get_filename_component(gateway_proto_path "${gateway_proto}" PATH)
+get_filename_component(interface_proto_path "${interface_proto}" PATH)
 
 # Generated sources of current matching server
 set(matching_proto_srcs "${CMAKE_CURRENT_BINARY_DIR}/matching.pb.cc")
@@ -102,21 +101,18 @@ set(matching_proto_hdrs "${CMAKE_CURRENT_BINARY_DIR}/matching.pb.h")
 set(matching_grpc_srcs "${CMAKE_CURRENT_BINARY_DIR}/matching.grpc.pb.cc")
 set(matching_grpc_hdrs "${CMAKE_CURRENT_BINARY_DIR}/matching.grpc.pb.h")
 # Generated sources of gateway server for reference
-set(gateway_proto_srcs "${CMAKE_CURRENT_BINARY_DIR}/gateway.pb.cc")
-set(gateway_proto_hdrs "${CMAKE_CURRENT_BINARY_DIR}/gateway.pb.h")
-
-#file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/gateway/protocol)
-#file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/matching/protocol)
+set(interface_proto_srcs "${CMAKE_CURRENT_BINARY_DIR}/interface.pb.cc")
+set(interface_proto_hdrs "${CMAKE_CURRENT_BINARY_DIR}/interface.pb.h")
 
 add_custom_command(
-        OUTPUT "${gateway_proto_srcs}" "${gateway_proto_hdrs}"
+        OUTPUT "${interface_proto_srcs}" "${interface_proto_hdrs}"
         COMMAND ${_PROTOBUF_PROTOC}
         ARGS --cpp_out "${CMAKE_CURRENT_BINARY_DIR}/"
-        -I"${gateway_proto_path}"
+        -I"${interface_proto_path}"
         -I"${CMAKE_CURRENT_SOURCE_DIR}/grpc/third_party/googleapis"
         -I"${CMAKE_CURRENT_SOURCE_DIR}/grpc/third_party/protobuf/src"
-        "${gateway_proto}"
-        DEPENDS "${gateway_proto}")
+        "${interface_proto}"
+        DEPENDS "${interface_proto}")
 add_custom_command(
         OUTPUT "${matching_proto_srcs}" "${matching_proto_hdrs}" "${matching_grpc_srcs}" "${matching_grpc_hdrs}"
         COMMAND ${_PROTOBUF_PROTOC}
@@ -140,13 +136,13 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/grpc/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${OpenCV_INCLUDE_DIRS}")
 
-add_library(utility STATIC
-        ${gateway_proto_srcs}
-        ${gateway_proto_hdrs}
-        ${matching_proto_srcs}
-        ${matching_proto_hdrs}
-        ${matching_grpc_srcs}
-        ${matching_grpc_hdrs})
+#add_library(utility STATIC
+#        ${gateway_proto_srcs}
+#        ${gateway_proto_hdrs}
+#        ${matching_proto_srcs}
+#        ${matching_proto_hdrs}
+#        ${matching_grpc_srcs}
+#        ${matching_grpc_hdrs})
 add_library(vocdata STATIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include/data/VOCData.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/data/VOCData.cpp
@@ -164,15 +160,19 @@ foreach (_target
         matching_client matching_server train_classifier warpHomography)
     add_executable(${_target} "${_target}.cpp"
             ${CMAKE_CURRENT_SOURCE_DIR}/src/Base.cpp
-#            ${CMAKE_CURRENT_SOURCE_DIR}/src/Bootstrap.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/Matcher.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/Classifier.cpp
 #            ${CMAKE_CURRENT_SOURCE_DIR}/src/defines.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/precomp.hpp)
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/precomp.hpp
+            ${interface_proto_srcs}
+            ${matching_proto_srcs}
+            ${matching_grpc_srcs})
     target_link_libraries(${_target}
+            ${_REFLECTION}
             ${_GRPC_GRPCPP_UNSECURE}
             ${_PROTOBUF_LIBPROTOBUF}
             ${OpenCV_LIBS}
-            utility
+#            utility
             vocdata
             params
             defines)

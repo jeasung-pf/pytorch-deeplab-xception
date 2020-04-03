@@ -16,31 +16,7 @@ syntax = "proto3";
 package protocol;
 
 import "google/api/annotations.proto";
-
-message Feature {
-  bytes image_encoded = 1;
-  string image_filename = 2;
-  string image_format = 3;
-  int32 image_height = 4;
-  int32 image_width = 5;
-  bytes image_segmentation_class_encoded = 6;
-  string image_segmentation_class_format = 7;
-}
-
-message Features {
-  repeated Feature features = 1;
-}
-// TODO. 타입 정하자
-message Response {
-  string image_filename = 1;
-  string image_recognition_numbers = 2;
-  string image_recognition_verification = 3;
-  string image_recognition_dates = 4;
-}
-
-message Responses {
-  repeated Response responses = 1;
-}
+import "interface.proto";
 
 service Gateway {
 

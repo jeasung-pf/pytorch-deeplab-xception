@@ -35,6 +35,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+#include <Matcher.hpp>
+
 
 static void help(char **argv) {
     // print a welcome message, and the OpenCV version
@@ -65,37 +67,13 @@ std::string labels[4] = {
 };
 std::vector<cv::Point> roi_corners;
 std::vector<std::vector<cv::Point>> contours;
+cv::Ptr<cv::Matcher::Matcher> m;
 int roiIndex;
 bool dragging = false;
 int selected_corner_index = 0;
 bool validation_needed = false;
 
 static cv::Mat image, captured, clicked, mask, matching, homography;
-
-static std::string m_window_image = "Template image window",
-        m_window_captured = "The current frame captured",
-        m_window_clicked = "The frame captured by mouse click",
-        m_window_mask = "Mask created",
-        m_window_matching = "Source and Target correspondence",
-        m_window_homography = "Projected image using estimated image";
-
-bool createWindow(void) {
-    cv::namedWindow(m_window_image, CV_WINDOW_AUTOSIZE);
-    cv::namedWindow(m_window_captured, CV_WINDOW_AUTOSIZE);
-    cv::namedWindow(m_window_clicked, CV_WINDOW_AUTOSIZE);
-    cv::namedWindow(m_window_mask, CV_WINDOW_AUTOSIZE);
-    cv::namedWindow(m_window_matching, CV_WINDOW_AUTOSIZE);
-    cv::namedWindow(m_window_homography, CV_WINDOW_AUTOSIZE);
-
-    cv::moveWindow(m_window_image, 0, 0);
-    cv::moveWindow(m_window_captured, 640, 0);
-    cv::moveWindow(m_window_clicked, 1280, 0);
-    cv::moveWindow(m_window_mask, 0, 540);
-    cv::moveWindow(m_window_matching, 640, 540);
-    cv::moveWindow(m_window_homography, 1280, 540);
-
-    return true;
-}
 
 bool withinCroppedArea(const cv::Point &pt) {
     if (((int)pt.x >= 50) && ((int)pt.x <= 200) && ((int)pt.y >= 20) && ((int)pt.y <= 50)) {
@@ -123,83 +101,35 @@ int main(int argc, char *argv[]) {
     float original_image_cols = (float) original_image.cols;
     float original_image_rows = (float) original_image.rows;
 
-    // TODO. find a list of ORB keypoints
-    cv::Ptr<cv::BRISK> orb = cv::BRISK::create();
-    std::vector<cv::KeyPoint> original_image_key_points, frame_key_points;
-    cv::Mat original_image_descriptors, frame_descriptors;
-    std::vector<cv::Point2f> original_image_corners, frame_corners;
-
     // create a descriptor matcher for list of orb feature.
-    cv::Ptr<cv::flann::LshIndexParams> indexParams = new cv::flann::LshIndexParams(10, 10, 2);
-    cv::Ptr<cv::DescriptorMatcher> matcher = new cv::FlannBasedMatcher(indexParams, new cv::flann::SearchParams());
-    std::vector<std::vector<cv::DMatch>> matches;
+    cv::Ptr<cv::Matcher::FeatureParams> featureParams = new cv::Matcher::BRISKFeatureParams();
+    cv::Ptr<cv::flann::IndexParams> indexParams = new cv::flann::LshIndexParams(10, 10, 2);
+    cv::Ptr<cv::flann::SearchParams> searchParams = new cv::flann::SearchParams();
 
-    createWindow();
+    // create an instance of matcher class.
+    m = new cv::Matcher::Matcher(featureParams, indexParams, searchParams);
 
-    cv::imshow(m_window_image, original_image);
-    cv::setMouseCallback(m_window_captured, onMouse, 0);
-    cv::setMouseCallback(m_window_clicked, onMouseMask, 0);
+    try {
+        m->create_window();
+        m->window_created = true;
+    } catch (std::exception e) {
+        std::cout << "Error while creating window. Probably the environment you run this program doesn't support GUI." << std::endl;
+        m->window_created = true;
+    }
+    cv::imshow(m->m_window_image, original_image);
+    cv::setMouseCallback(m->m_window_captured, onMouse, 0);
+    cv::setMouseCallback(m->m_window_clicked, onMouseMask, 0);
 
     bool endProgram = false;
     while (!endProgram) {
         vstream >> captured;
-        cv::imshow(m_window_captured, captured);
+        cv::imshow(m->m_window_captured, captured);
 
         if (dragging) {
             // TODO. inlier analysis is required.
-            cv::Mat clicked_masked, original_image_threshold, clicked_masked_threshold;
+            cv::Mat calibrated;
             try {
-                std::vector<std::vector<cv::DMatch>> filtered;
-                clicked.copyTo(clicked_masked, mask);
-                // Apply adaptive thresholding
-//                cv::cvtColor(original_image, original_image_threshold, cv::COLOR_RGB2GRAY);
-//                cv::cvtColor(clicked_masked, clicked_masked_threshold, cv::COLOR_RGB2GRAY);
-//                cv::adaptiveThreshold(original_image_threshold, original_image_threshold, 255.0, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, 11, 2);
-//                cv::adaptiveThreshold(clicked_masked_threshold, clicked_masked_threshold, 255.0, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, 11, 2);
-//
-//                if (!clicked_masked_threshold.data) {
-//                    CV_Error(CV_StsNullPtr, "Image is null");
-//                }
-
-//                cv::imshow(m_window_image, original_image_threshold);
-//                cv::imshow(m_window_clicked, clicked_masked_threshold);
-                std::cout << "Computing features..." << std::endl;
-                orb->detectAndCompute(original_image, cv::noArray(), original_image_key_points, original_image_descriptors, false);
-                orb->detectAndCompute(clicked_masked, cv::noArray(), frame_key_points, frame_descriptors, false);
-                matcher->knnMatch(frame_descriptors, original_image_descriptors, matches, 1);
-                std::cout << "Threshold value " << threshold << std::endl;
-                for (auto elem: matches) {
-                    std::vector<cv::DMatch> filtered_elem;
-                    for (auto match: elem) {
-                        std::cout << match.distance << std::endl;
-                        if ((float)match.distance < threshold && withinCroppedArea(original_image_key_points[match.trainIdx].pt)) {
-                            filtered_elem.push_back(match);
-                        }
-                    }
-
-                    if (filtered_elem.size() != 0) {
-                        filtered.push_back(filtered_elem);
-                    }
-                }
-                std::cout << filtered.size() << std::endl;
-
-                std::vector<std::vector<cv::DMatch>> matches_top_n(filtered.begin(), filtered.end());
-                cv::drawMatches(clicked_masked, frame_key_points, original_image, original_image_key_points, matches_top_n, matching);
-
-                for (auto &match: filtered) {
-                    for (auto &elem : match) {
-                        original_image_corners.push_back(original_image_key_points[elem.trainIdx].pt);
-                        frame_corners.push_back(frame_key_points[elem.queryIdx].pt);
-                    }
-                }
-                cv::Mat H = cv::findHomography(frame_corners, original_image_corners, cv::RANSAC, reprojection_error);
-                cv::Mat F = cv::findFundamentalMat(frame_corners, original_image_corners, cv::FM_RANSAC);
-                // do perspective transformation
-                cv::Mat warped_image;
-                cv::warpPerspective(clicked_masked, warped_image, H, cv::Size());
-
-                cv::imshow(m_window_homography, warped_image);
-                cv::imshow(m_window_matching, matching);
+                m->train(clicked, original_image, mask, calibrated, threshold);
             } catch (std::exception e) {
                 std::cout << e.what() << std::endl;
             }
@@ -207,7 +137,7 @@ int main(int argc, char *argv[]) {
             std::cout << "Dragging: " << dragging << std::endl;
         } else if (validation_needed) {
             captured.copyTo(clicked);
-            cv::imshow(m_window_clicked, clicked);
+            cv::imshow(m->m_window_clicked, clicked);
             validation_needed = false;
         }
 
@@ -233,9 +163,6 @@ int main(int argc, char *argv[]) {
 
     }
 
-    orb.release();
-    matcher.release();
-
     return 0;
 }
 
@@ -250,7 +177,7 @@ static void onMouseMask(int event, int x, int y, int flags, void *userdata) {
         roi_corners.push_back(cv::Point(x, y));
         std::cout << "Point(" << x << ", " << y << ") appended" << std::endl;
 
-        imshow(m_window_captured, captured);
+        imshow(m->m_window_captured, captured);
     }
 
     if (event == cv::EVENT_RBUTTONDOWN) {
@@ -264,7 +191,7 @@ static void onMouseMask(int event, int x, int y, int flags, void *userdata) {
             drawContours(mask, contours, 0, cv::Scalar(255), -1);
             cv::Mat masked(captured.size(), CV_8UC3, cv::Scalar(255, 255, 255));
             mask.copyTo(masked, mask);
-            imshow(m_window_mask, masked);
+            imshow(m->m_window_mask, masked);
             dragging = true;
         }
     }
